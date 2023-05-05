@@ -1,43 +1,49 @@
-from typing import Iterator
 import torch
-from torch.nn import Module
-from torch._jit_internal import _copy_to_script_wrapper
-import FFLayer
+from torch.utils.data import DataLoader
+from torchvision.datasets import MNIST
+from torchvision.transforms import ToTensor
+from FFLayer import *
 import FFEncoding
 
-overlay_y_on_x = FFEncoding.overlay
+# define the single-layer neural network
+net = Layer(784, 10)
 
+# load the MNIST dataset
+train_data = MNIST(root="./data", train=True, download=True, transform=ToTensor())
+train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
 
-class FFNetwork(torch.nn.Module):
-    def __init__(self, dims):
-        super().__init__()
-        assert len(dims) >= 1, "len(dims) should be greater than equal to 1"
-        for d in range(len(dims) - 1):
-            self.add_module(str(d), FFLayer(dims[d], dims[d + 1], torch.nn.GELU()))
+# train the network on the MNIST dataset
+for images, labels in train_loader:
+    # convert images and labels to the appropriate format
+    images = images.view(images.shape[0], -1)
+    labels = labels.type(torch.float32)
 
-    def __len__(self) -> int:
-        return len(self._modules)
+    # create positive and negative samples
+    pos_idx = (labels == 1)
+    neg_idx = (labels == 0)
+    x_pos = images[pos_idx]
+    x_neg = images[neg_idx]
 
-    @_copy_to_script_wrapper
-    def __dir__(self):
-        keys = super().__dir__()
-        keys = [key for key in keys if not key.isdigit()]
-        return keys
+    # train the network for one epoch
+    net.train(x_pos, x_neg)
 
-    @_copy_to_script_wrapper
-    def __iter__(self) -> Iterator[Module]:
-        return iter(self._modules.values())
+# test the network on the MNIST test set
+test_data = MNIST(root="./data", train=False, download=True, transform=ToTensor())
+test_loader = DataLoader(test_data, batch_size=64, shuffle=True)
 
-    def forward(self, *input):
-        if self.training:
-            assert len(input) == 2, "Pass both positive and negative input"
-            x_pos, x_neg = tuple(input)
-            for i, module in enumerate(self.children()):
-                print("Training layer", i, "...")
-                x_pos, x_neg = module(x_pos, x_neg)
-            return
-        else:
-            assert len(input) == 1, "Only pass the input data "
-            for module in self:
-                input = module(input)
-            return input
+correct = 0
+total = 0
+
+for images, labels in test_loader:
+    # convert images to the appropriate format
+    images = images.view(images.shape[0], -1)
+
+    # compute the network's predictions
+    predictions = net.predict(images)
+
+    # update the accuracy count
+    correct += (predictions == labels).sum()
+    total += labels.shape[0]
+
+accuracy = (float(correct) / float(total))
+print("Accuracy % :", accuracy)
