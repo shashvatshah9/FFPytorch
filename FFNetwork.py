@@ -28,19 +28,16 @@ class FFNetwork(torch.nn.Module):
     def __iter__(self) -> Iterator[Module]:
         return iter(self._modules.values())
 
-    def forward(self, input):
-        for module in self:
-            input = module(input)
-        return input
-
-    def predict(self, x):
-        goodness_per_label = []
-        for label in range(10):
-            h = overlay_y_on_x(x, label)
-            goodness = []
+    def forward(self, *input):
+        if self.training:
+            assert len(input) == 2, "Pass both positive and negative input"
+            x_pos, x_neg = tuple(input)
+            for i, module in enumerate(self.children()):
+                print("Training layer", i, "...")
+                x_pos, x_neg = module(x_pos, x_neg)
+            return
+        else:
+            assert len(input) == 1, "Only pass the input data "
             for module in self:
-                h = module(h)
-                goodness += [h.pow(2).mean(1)]
-            goodness_per_label += [sum(goodness).unsqueeze(1)]
-        goodness_per_label = torch.cat(goodness_per_label, 1)
-        return goodness_per_label.argmax(1)
+                input = module(input)
+            return input
