@@ -54,9 +54,9 @@ def training_loop(model, x, y, encoding="overlay"):
     x_pos, x_neg = None, None
     if encoding == "overlay":
         x_pos = overlay_y_on_x(x, y)
-        rnd = torch.randperm(x.size(0))
-        x_neg = overlay_y_on_x(x, y[rnd])
-
+        rand_mask = torch.randint(0, 9, y.size()).cuda()
+        y_rnd = (y + rand_mask + 1) % 10
+        x_neg = overlay_y_on_x(x, y_rnd)
     model.train()
     model(x_pos, x_neg)
 
