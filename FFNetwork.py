@@ -1,46 +1,69 @@
-from typing import Iterator
 import torch
-from torch.nn import Module
-from torch._jit_internal import _copy_to_script_wrapper
-import FFLayer
-import FFEncoding
-
-overlay_y_on_x = FFEncoding.overlay
-
+from torch.nn import Module, ModuleList
+from torch.optim import Adam, Optimizer
+import torch.optim as optim
+from typing import Iterator
+import tqdm
 
 class FFNetwork(torch.nn.Module):
     def __init__(self, dims):
         super().__init__()
         assert len(dims) >= 1, "len(dims) should be greater than equal to 1"
+        
+        layers = []
         for d in range(len(dims) - 1):
-            self.add_module(str(d), FFLayer(dims[d], dims[d + 1], torch.nn.GELU()))
+            layers.append(nn.Linear(dims[d], dims[d+1]))
+            layers.append(nn.ReLU())
+        self.layers = nn.Sequential(*layers)
 
     def __len__(self) -> int:
-        return len(self._modules)
+        return len(self.layers)
 
-    @_copy_to_script_wrapper
-    def __dir__(self):
-        keys = super().__dir__()
-        keys = [key for key in keys if not key.isdigit()]
-        return keys
-
-    @_copy_to_script_wrapper
     def __iter__(self) -> Iterator[Module]:
-        return iter(self._modules.values())
+        return iter(self.layers)
 
     def forward(self, input):
-        for module in self:
-            input = module(input)
-        return input
+        return self.layers(input)
 
     def predict(self, x):
-        goodness_per_label = []
-        for label in range(10):
-            h = overlay_y_on_x(x, label)
-            goodness = []
-            for module in self:
-                h = module(h)
-                goodness += [h.pow(2).mean(1)]
-            goodness_per_label += [sum(goodness).unsqueeze(1)]
-        goodness_per_label = torch.cat(goodness_per_label, 1)
-        return goodness_per_label.argmax(1)
+        with torch.no_grad():
+            output = self.forward(x)
+            _, predicted = torch.max(output, 1)
+            return predicted
+        
+        
+# create an instance of the FFNetwork model
+ffnet = FFNetwork([784, 256, 256, 10])
+
+# set up the loss function and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(ffnet.parameters(), lr=0.001)
+
+# train the model for num_epochs epochs
+num_epochs = 10
+for epoch in range(num_epochs):
+    running_loss = 0.0
+    correct = 0
+    total = 0
+    
+    for i, data in enumerate(train_loader, 0):
+        # assume data is loaded in train_loader
+        # enumerate over batches
+        # torch.max - get predictions
+        # prints metrics
+        inputs, labels = data
+        optimizer.zero_grad()
+        outputs = ffnet(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        running_loss += loss.item()
+        _, predicted = torch.max(outputs.data, 1)
+        total += labels.size(0)
+        correct += (predicted == labels).sum().item()
+
+    epoch_loss = running_loss / len(train_loader)
+    epoch_accuracy = 100 * correct / total
+
+    print(f"Epoch {epoch + 1} - Loss: {epoch_loss:.3f} - Accuracy: {epoch_accuracy:.2f}%")
