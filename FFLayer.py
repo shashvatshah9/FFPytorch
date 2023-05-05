@@ -3,7 +3,6 @@ from torch.nn import Module, Linear, ReLU
 from tqdm import tqdm
 from torch.optim import Adam, Optimizer
 
-
 class Layer(Linear):
     def __init__(
         self,
@@ -50,3 +49,4 @@ class Layer(Linear):
             loss.backward()
             self.opt.step()
         return self.forward(x_pos).detach(), self.forward(x_neg).detach()
+
