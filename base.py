@@ -9,6 +9,14 @@ import FFEncoding
 
 overlay_y_on_x = FFEncoding.overlay
 
+import matplotlib.pyplot as plt
+import torch
+from torchvision.datasets import MNIST
+from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
+from torch.utils.data import DataLoader
+
+overlay_y_on_x = FFEncoding.overlay
+
 
 def MNIST_loaders(train_batch_size=50000, test_batch_size=10000):
     transform = Compose(
@@ -49,26 +57,46 @@ def training_loop(model, x, y, encoding="overlay"):
         rnd = torch.randperm(x.size(0))
         x_neg = overlay_y_on_x(x, y[rnd])
 
-    h_pos, h_neg = x_pos, x_neg
-    # output = model(x_pos, x_neg, encoding)
-    for i, module in enumerate(model.children()):
-        print("Training layer", i, "...")
-        h_pos, h_neg = module.train(h_pos, h_neg)
+    model.train()
+    model(x_pos, x_neg)
+
+
+def eval_loop(model, x, encoding="overlay"):
+    if encoding == "overlay":
+        goodness_per_label = []
+        for label in range(10):
+            h = overlay_y_on_x(x, label)
+            goodness = []
+            for module in model.children():
+                h = module(h)
+                goodness += [h.pow(2).mean(1)]
+            goodness_per_label += [sum(goodness).unsqueeze(1)]
+        goodness_per_label = torch.cat(goodness_per_label, 1)
+        return goodness_per_label.argmax(1)
+
+
+def calc_error(model, x, y) -> float:
+    model.eval()
+    return 1 - eval_loop(model, x).eq(y).float().mean().item()
 
 
 torch.manual_seed(1234)
 train_loader, test_loader = MNIST_loaders()
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 net = FFNetwork([784, 500, 500])
-net = net.cuda()
+net = net.to(device)
 x, y = next(iter(train_loader))
-x, y = x.cuda(), y.cuda()
+x, y = x.to(device), y.to(device)
 
 training_loop(net, x, y)
-
-print("train error:", 1.0 - net.predict(x).eq(y).float().mean().item())
+net.eval()
+print(calc_error(net, x, y))
 
 x_te, y_te = next(iter(test_loader))
 x_te, y_te = x_te.cuda(), y_te.cuda()
 
-print("test error:", 1.0 - net.predict(x_te).eq(y_te).float().mean().item())
+# USE EVAL
+net.eval()
+print(calc_error(net, x_te, y_te))
