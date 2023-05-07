@@ -33,11 +33,13 @@ class FFLayer(Linear):
         )
 
     def forward(self, *input):
+        # self.to('cuda')
         if self.training:
             assert len(input) == 2, "Pass both positive and negative input"
             x_pos, x_neg = tuple(input)
 
-            for _ in tqdm(range(self.num_epochs)):
+            # for _ in tqdm(range(self.num_epochs)):
+            for _ in range(self.num_epochs):
                 g_pos = self.forward_pass(x_pos).pow(2).mean(1)
                 g_neg = self.forward_pass(x_neg).pow(2).mean(1)
                 # The following loss pushes pos (neg) samples to
@@ -53,8 +55,13 @@ class FFLayer(Linear):
                 # is not considered backpropagation.
                 loss.backward(retain_graph=True)
                 self.opt.step()
-
-            return self.forward_pass(x_pos), self.forward_pass(x_neg)
+            x1, x2 = self.forward_pass(x_pos), self.forward_pass(x_neg)
+            # return self.forward_pass(x_pos), self.forward_pass(x_neg)
+            # self.to('cpu')
+            return x1, x2
         else:
             assert len(input) == 1, "Pass only 1 argument in eval mode"
-            return self.forward_pass(input[0])
+            x1 = self.forward_pass(input[0])
+            # return self.forward_pass(input[0])
+            # self.to('cpu')
+            return x1

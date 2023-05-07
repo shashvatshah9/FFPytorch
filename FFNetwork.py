@@ -2,10 +2,10 @@ from typing import Iterator
 import torch
 from torch.nn import Module
 from torch._jit_internal import _copy_to_script_wrapper
-import FFLayer
-import FFEncoding
+from FFLayer import FFLayer
+# import FFEncoding
 
-overlay_y_on_x = FFEncoding.overlay
+# overlay_y_on_x = FFEncoding.overlay
 
 
 class FFNetwork(torch.nn.Module):
@@ -32,9 +32,16 @@ class FFNetwork(torch.nn.Module):
         if self.training:
             assert len(input) == 2, "Pass both positive and negative input"
             x_pos, x_neg = tuple(input)
+            modules = []
             for i, module in enumerate(self.children()):
-                print("Training layer", i, "...")
+                # print("Training layer", i, "...")
+                # module.to('cuda')
+                modules.append(module)
+                # module.to('cuda')
                 x_pos, x_neg = module(x_pos, x_neg)
+                # x_pos = x_pos.detach()
+                # x_neg = x_neg.detach()
+                # module.to('cpu')
             return
         else:
             assert len(input) == 1, "Only pass the input data "
