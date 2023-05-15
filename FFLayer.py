@@ -12,7 +12,7 @@ class FFLayer(Linear):
         activation: Module = ReLU,
         optimizer: Optimizer = None,
         threshold: float = 2.0,
-        num_epochs: int = 1000,
+        num_epochs: int = 1,
         bias=True,
         device=None,
         dtype=None,
@@ -33,12 +33,10 @@ class FFLayer(Linear):
         )
 
     def forward(self, *input):
-        # self.to('cuda')
         if self.training:
             assert len(input) == 2, "Pass both positive and negative input"
             x_pos, x_neg = tuple(input)
 
-            # for _ in tqdm(range(self.num_epochs)):
             for _ in range(self.num_epochs):
                 g_pos = self.forward_pass(x_pos).pow(2).mean(1)
                 g_neg = self.forward_pass(x_neg).pow(2).mean(1)
@@ -56,12 +54,8 @@ class FFLayer(Linear):
                 loss.backward(retain_graph=True)
                 self.opt.step()
             x1, x2 = self.forward_pass(x_pos), self.forward_pass(x_neg)
-            # return self.forward_pass(x_pos), self.forward_pass(x_neg)
-            # self.to('cpu')
             return x1, x2
         else:
             assert len(input) == 1, "Pass only 1 argument in eval mode"
-            x1 = self.forward_pass(input[0])
-            # return self.forward_pass(input[0])
-            # self.to('cpu')
-            return x1
+            r = self.forward_pass(input[0])
+            return r

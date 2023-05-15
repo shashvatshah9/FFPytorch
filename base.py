@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
+import time
 from torchvision.datasets import MNIST
 from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
@@ -11,7 +12,7 @@ from FFEncoding import FFEncoding
 overlay_y_on_x = FFEncoding.overlay
 
 
-def MNIST_loaders(train_batch_size=1000, test_batch_size=1000):
+def MNIST_loaders(train_batch_size=50, test_batch_size=50):
     transform = Compose(
         [
             ToTensor(),
@@ -43,108 +44,89 @@ def visualize_sample(data, name="", idx=0):
     plt.show()
 
 
-# def training_loop(model, x, y, encoding="overlay"):
-#     x_pos, x_neg = None, None
-#     if encoding == "overlay":
-#         x_pos = overlay_y_on_x(x, y)
-#         rand_mask = torch.randint(0, 9, y.size()).to(device)
-#         y_rnd = (y + rand_mask + 1) % 10
-#         x_neg = overlay_y_on_x(x, y_rnd)
-#     model.train()
-#     model(x_pos, x_neg)
+def training_loop(model, iterator, device, encoding="overlay"):
+    print("Training...")
+    model.train()
+    model(iterator, device)
 
 
-def training_loop(model, train_loader, device, encoding="overlay"):
-    print("Training loop")
-    model.to(device)
-    for i, (x, y) in enumerate(train_loader):
-        print(f"\nBatch {i} out of {len(train_loader)}")
-        x_pos, x_neg = None, None
-        if encoding == "overlay":
-            x_pos = overlay_y_on_x(x, y)
-            rand_mask = torch.randint(0, 9, y.size())
-            y_rnd = (y + rand_mask + 1) % 10
-            x_neg = overlay_y_on_x(x, y_rnd)
-        x_pos, x_neg = x_pos.to(device), x_neg.to(device)
-        # model.to(device)
-        model.train()
-        model(x_pos, x_neg)
-        # model.to('cpu')
-        error = calc_error(model, x, y, device)
-        print(f"Error {error}")
-    model.to('cpu')
+def test_loop(model, test_loader, device):
+    print("Evaluating...")
+    model.eval()
+    batch_error = 0
+    for x, y in test_loader:
+        x, y = x.to(device), y.to(device)
+        batch_error += calc_error(model, x, y, device)
+        x, y = x.to('cpu'), y.to('cpu')
+    
+    avg_error = batch_error / len(test_loader)
+    print(f"testing error: {avg_error}")
 
 
-
-def eval_loop(model, x, encoding="overlay"):
+def eval_loop(model, x, device, encoding="overlay"):
     if encoding == "overlay":
         goodness_per_label = []
         for label in range(10):
             h = overlay_y_on_x(x, label)
             goodness = []
             for module in model.children():
-                h = h.to(device)
-                # module.to(device)
+                module.to(device)
                 h = module(h)
-                # module.to('cpu')
                 goodness += [h.pow(2).mean(1)]
+                module.to('cpu')
             goodness_per_label += [sum(goodness).unsqueeze(1)]
         goodness_per_label = torch.cat(goodness_per_label, 1)
-        # print(f"goodness: {goodness_per_label}")
         return goodness_per_label.argmax(1)
 
 
-# def eval_loop(model, train_loader, encoding="overlay"):
-#     if encoding == "overlay":
-#         for x, _ in train_loader:
-#             for label in range(10):
-#                 h = overlay_y_on_x(x, label)
-#                 goodness = []
-#                 for module in model.children():
-#                     h = module(h)
-#                     goodness += h.pow(2).mean(1)
-                
-            
-
-def test_loop(model, test_loader, device):
-    model.eval()
-    batch_error = 0
-    for x, y in test_loader:
-        x, y = x.to(device), y.to(device)
-        batch_error += calc_error(model, x, y)
-    
-    avg_error = batch_error / len(test_loader)
-    print(avg_error)
-
 def calc_error(model, x, y, device) -> float:
     model.eval()
-    r1 = eval_loop(model, x)
-    r1 = r1.to('cuda')
-    y = y.to('cuda')
-    r2 = r1.eq(y).float().mean().item()
-    r = 1 - r2
-    return r
+    return 1 - eval_loop(model, x, device).eq(y).float().mean().item()
 
 
-torch.manual_seed(1234)
-train_loader, test_loader = MNIST_loaders()
+if __name__ == "__main__":
+    # Define parameters
+    EPOCHS = 10
+    BATCH_SIZE=50
+    TRAIN_BATCH_SIZE = BATCH_SIZE
+    TEST_BATCH_SIZE = BATCH_SIZE
+    encoding = "overlay"
+    torch.manual_seed(1234)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Build train and test loaders
+    train_loader, test_loader = MNIST_loaders(train_batch_size=TRAIN_BATCH_SIZE, test_batch_size=TEST_BATCH_SIZE)
 
-net = FFNetwork([784, 500, 500])
-# net = net.to(device)
-# x, y = next(iter(train_loader))
-# x, y = x.to(device), y.to(device)
+    # Define device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-# training_loop(net, x, y)
-training_loop(net, train_loader, device)
-# net.eval()
-# print(calc_error(net, x, y))
+    # Build network
+    net = FFNetwork([784, 500, 500])
 
-# x_te, y_te = next(iter(test_loader))
-# x_te, y_te = x_te.cuda(), y_te.cuda()
+    # Iterator in place of DataLoader
+    data_iter = []
 
-# USE EVAL
-# net.eval()
-# print(calc_error(net, x_te, y_te))
-test_loop(net, test_loader, device)
+    # Encode true and false labels on images to create positive and negative data
+    print("Encoding positive and negative data with correct and incorrect labels")
+    for x, y in tqdm(train_loader):
+        x, y = x.to(device), y.to(device)
+        x_pos, x_neg = None, None
+        if encoding == "overlay":
+            x_pos = overlay_y_on_x(x, y)
+            rand_mask = torch.randint(0, 9, y.size()).to(device)
+            y_rnd = (y + rand_mask + 1) % 10
+            x_neg = overlay_y_on_x(x, y_rnd)
+        x, y = x.to('cpu'), y.to('cpu')
+        x_pos, x_neg = x_pos.to('cpu'), x_neg.to('cpu')
+        data_iter.append((x_pos, x_neg))
+
+    # Train / test
+    for epoch in range(EPOCHS):
+        print(f"==== EPOCH: {epoch} ====")
+        start = time.time()
+        training_loop(net, data_iter, device)
+        test_loop(net, test_loader, device)
+        end = time.time()
+        elapsed = end - start
+        print(f"Completed epoch {epoch} in {elapsed} seconds")
+

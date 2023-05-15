@@ -1,11 +1,9 @@
 from typing import Iterator
 import torch
+import copy
 from torch.nn import Module
 from torch._jit_internal import _copy_to_script_wrapper
 from FFLayer import FFLayer
-# import FFEncoding
-
-# overlay_y_on_x = FFEncoding.overlay
 
 
 class FFNetwork(torch.nn.Module):
@@ -28,20 +26,24 @@ class FFNetwork(torch.nn.Module):
     def __iter__(self) -> Iterator[Module]:
         return iter(self._modules.values())
 
-    def forward(self, *input):
+    def forward(self, input, device):
         if self.training:
-            assert len(input) == 2, "Pass both positive and negative input"
-            x_pos, x_neg = tuple(input)
-            modules = []
+            # Loop through all batches in dataset
+            layer_data = copy.deepcopy(input)
+            # Loop through each layer
             for i, module in enumerate(self.children()):
-                # print("Training layer", i, "...")
-                # module.to('cuda')
-                modules.append(module)
-                # module.to('cuda')
-                x_pos, x_neg = module(x_pos, x_neg)
-                # x_pos = x_pos.detach()
-                # x_neg = x_neg.detach()
-                # module.to('cpu')
+                print(f"Training layer {i}")
+                module.to(device)
+                module.zero_grad()
+                for i, x_data in enumerate(layer_data):
+                    x_pos, x_neg = x_data[0], x_data[1]
+                    x_pos, x_neg = x_pos.to(device), x_neg.to(device)
+                    x_pos, x_neg = module(x_pos, x_neg)
+                    x_pos = x_pos.detach()
+                    x_neg = x_neg.detach()
+                    x_pos, x_neg = x_pos.to('cpu'), x_neg.to('cpu')
+                    layer_data[i] = (x_pos, x_neg)
+                module.to('cpu')
             return
         else:
             assert len(input) == 1, "Only pass the input data "
