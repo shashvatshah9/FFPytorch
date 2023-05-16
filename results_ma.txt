@@ -1,0 +1,17 @@
+A1 R1 testing error: 0.0768000215291977
+A1 R2 testing error: 0.0689000204205513
+A1 R3 testing error: 0.06050002068281174
+A1 R4 testing error: 0.9020000027492643
+
+
+A2 R1 testing error: 0.05430002123117447
+A2 R2 testing error: 0.9020000027492643
+A2 R3 testing error: 0.05700002133846283
+A2 R4 testing error: 0.9020000027492643
+
+
+
+***********************  BEST    **********************************************
+FFNetworkBatched([784, 300, 300, 300])
+lr = 0.1 
+hidden_sizes = [500,500]
