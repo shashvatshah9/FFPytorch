@@ -12,7 +12,7 @@ from FFEncoding import FFEncoding
 overlay_y_on_x = FFEncoding.overlay
 
 
-def MNIST_loaders(train_batch_size=50, test_batch_size=50):
+def get_data_loaders(train_batch_size=50, test_batch_size=50):
     transform = Compose(
         [
             ToTensor(),
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     torch.manual_seed(1234)
 
     # Build train and test loaders
-    train_loader, test_loader = MNIST_loaders(
+    train_loader, test_loader = get_data_loaders(
         train_batch_size=TRAIN_BATCH_SIZE, test_batch_size=TEST_BATCH_SIZE
     )
 
