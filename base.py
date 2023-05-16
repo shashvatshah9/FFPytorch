@@ -6,7 +6,7 @@ from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from FFNetwork import FFNetwork
+from FFNetwork import FFNetworkBatched
 from FFEncoding import FFEncoding
 
 overlay_y_on_x = FFEncoding.overlay
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Build network
-    net = FFNetwork([784, 500, 500])
+    net = FFNetworkBatched([784, 500, 500])
 
     # Iterator in place of DataLoader
     data_iter = []
