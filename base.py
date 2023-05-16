@@ -57,8 +57,8 @@ def test_loop(model, test_loader, device):
     for x, y in test_loader:
         x, y = x.to(device), y.to(device)
         batch_error += calc_error(model, x, y, device)
-        x, y = x.to('cpu'), y.to('cpu')
-    
+        x, y = x.to("cpu"), y.to("cpu")
+
     avg_error = batch_error / len(test_loader)
     print(f"testing error: {avg_error}")
 
@@ -73,7 +73,7 @@ def eval_loop(model, x, device, encoding="overlay"):
                 module.to(device)
                 h = module(h)
                 goodness += [h.pow(2).mean(1)]
-                module.to('cpu')
+                module.to("cpu")
             goodness_per_label += [sum(goodness).unsqueeze(1)]
         goodness_per_label = torch.cat(goodness_per_label, 1)
         return goodness_per_label.argmax(1)
@@ -87,14 +87,16 @@ def calc_error(model, x, y, device) -> float:
 if __name__ == "__main__":
     # Define parameters
     EPOCHS = 10
-    BATCH_SIZE=50
+    BATCH_SIZE = 50
     TRAIN_BATCH_SIZE = BATCH_SIZE
     TEST_BATCH_SIZE = BATCH_SIZE
     encoding = "overlay"
     torch.manual_seed(1234)
 
     # Build train and test loaders
-    train_loader, test_loader = MNIST_loaders(train_batch_size=TRAIN_BATCH_SIZE, test_batch_size=TEST_BATCH_SIZE)
+    train_loader, test_loader = MNIST_loaders(
+        train_batch_size=TRAIN_BATCH_SIZE, test_batch_size=TEST_BATCH_SIZE
+    )
 
     # Define device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -109,15 +111,13 @@ if __name__ == "__main__":
     # Encode true and false labels on images to create positive and negative data
     print("Encoding positive and negative data with correct and incorrect labels")
     for x, y in tqdm(train_loader):
-        x, y = x.to(device), y.to(device)
         x_pos, x_neg = None, None
         if encoding == "overlay":
             x_pos = overlay_y_on_x(x, y)
-            rand_mask = torch.randint(0, 9, y.size()).to(device)
+            rand_mask = torch.randint(0, 9, y.size())
             y_rnd = (y + rand_mask + 1) % 10
             x_neg = overlay_y_on_x(x, y_rnd)
-        x, y = x.to('cpu'), y.to('cpu')
-        x_pos, x_neg = x_pos.to('cpu'), x_neg.to('cpu')
+
         data_iter.append((x_pos, x_neg))
 
     # Train / test
@@ -129,4 +129,3 @@ if __name__ == "__main__":
         end = time.time()
         elapsed = end - start
         print(f"Completed epoch {epoch} in {elapsed} seconds")
-
