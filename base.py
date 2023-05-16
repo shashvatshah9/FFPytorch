@@ -12,7 +12,7 @@ from FFEncoding import FFEncoding
 overlay_y_on_x = FFEncoding.overlay
 
 
-def get_data_loaders(train_batch_size=50, test_batch_size=50):
+def MNIST_loaders(train_batch_size=50, test_batch_size=50):
     transform = Compose(
         [
             ToTensor(),
@@ -51,56 +51,46 @@ def training_loop(model, iterator, device, encoding="overlay"):
 
 
 def test_loop(model, test_loader, device):
-    print("Evaluating...")
+    print("Evaluating TEST....")
     model.eval()
     batch_error = 0
     for x, y in test_loader:
         x, y = x.to(device), y.to(device)
         batch_error += calc_error(model, x, y, device)
+        x, y = x.to("cpu"), y.to("cpu")
 
     avg_error = batch_error / len(test_loader)
-    print(f"testing error: {avg_error}")
+    print(f"error: {avg_error}")
+    return avg_error
+
+def train_loop(model, train_loader, device):
+    print("Evaluating TRAIN...")
+    model.eval()
+    batch_error = 0
+    for x, y in train_loader:
+        x, y = x.to(device), y.to(device)
+        batch_error += calc_error(model, x, y, device)
+        x, y = x.to("cpu"), y.to("cpu")
+
+    avg_error = batch_error / len(test_loader)
+    print(f"error: {avg_error}")
+    return avg_error
 
 
-"""
-eval_loop(
-    model -> nn.Module model
-    input -> tensor input for eval
-    device -> torch.device
-    bached_per_layer -> False by default, if true then load each layer sequentially on device and store the output
-    encoding -> overlay by default
-)
-"""
-
-
-def eval_loop(model, input, device, batched_per_layer=False, encoding="overlay"):
-    if batched_per_layer == True:
-        if encoding == "overlay":
-            goodness_per_label = []
-            for label in range(10):
-                h = overlay_y_on_x(input, label)
-                goodness = []
-                for module in model.children():
-                    module.to(device)
-                    h = module(h)
-                    goodness += [h.pow(2).mean(1)]
-                    module.to("cpu")
-                goodness_per_label += [sum(goodness).unsqueeze(1)]
-            goodness_per_label = torch.cat(goodness_per_label, 1)
-            return goodness_per_label.argmax(1)
-    else:
-        model.to(device)
-        if encoding == "overlay":
-            goodness_per_label = []
-            for label in range(10):
-                h = overlay_y_on_x(input, label)
-                goodness = []
-                for module in model.children():
-                    h = module(h)
-                    goodness += [h.pow(2).mean(1)]
-                goodness_per_label += [sum(goodness).unsqueeze(1)]
-            goodness_per_label = torch.cat(goodness_per_label, 1)
-            return goodness_per_label.argmax(1)
+def eval_loop(model, x, device, encoding="overlay"):
+    if encoding == "overlay":
+        goodness_per_label = []
+        for label in range(10):
+            h = overlay_y_on_x(x, label)
+            goodness = []
+            for module in model.children():
+                module.to(device)
+                h = module(h)
+                goodness += [h.pow(2).mean(1)]
+                module.to("cpu")
+            goodness_per_label += [sum(goodness).unsqueeze(1)]
+        goodness_per_label = torch.cat(goodness_per_label, 1)
+        return goodness_per_label.argmax(1)
 
 
 def calc_error(model, x, y, device) -> float:
@@ -118,7 +108,7 @@ if __name__ == "__main__":
     torch.manual_seed(1234)
 
     # Build train and test loaders
-    train_loader, test_loader = get_data_loaders(
+    train_loader, test_loader = MNIST_loaders(
         train_batch_size=TRAIN_BATCH_SIZE, test_batch_size=TEST_BATCH_SIZE
     )
 
@@ -143,13 +133,30 @@ if __name__ == "__main__":
             x_neg = overlay_y_on_x(x, y_rnd)
 
         data_iter.append((x_pos, x_neg))
-
+    training_errors = []
+    testing_errors = []
     # Train / test
     for epoch in range(EPOCHS):
         print(f"==== EPOCH: {epoch} ====")
         start = time.time()
         training_loop(net, data_iter, device)
-        test_loop(net, test_loader, device)
+        training_error = train_loop(net, train_loader, device)
+        print("Training.....")        
+        training_errors.append(training_error)
+
+        testing_error = test_loop(net, test_loader, device)
+        testing_errors.append(testing_error)
         end = time.time()
         elapsed = end - start
         print(f"Completed epoch {epoch} in {elapsed} seconds")
+    # Plot errors
+    plt.plot(range(1, EPOCHS + 1), training_errors, label='Training Error')  # Use training_errors instead of errors
+    plt.plot(range(1, EPOCHS + 1), testing_errors, label='Testing Error')  # Use testing_errors instead of errors
+    plt.xlabel('Epoch')
+    plt.ylabel('Error')
+    plt.title('Error over Epochs')
+    plt.legend()
+    plt.xticks(range(1, EPOCHS + 1))  # Set x-axis tick labels to 1, 2, ...
+    plt.yticks([i/10 for i in range(11)])  # Set y-axis tick labels with more detail (0.0, 0.1, 0.2, ..., 1.0)
+    plt.savefig('error_plot.png')  # Save the plot as a PNG file
+    plt.show()
