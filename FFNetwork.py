@@ -28,10 +28,12 @@ class FFNetwork(torch.nn.Module):
 
     def forward(self, *input):
         if self.training:
-            assert len(input) == 2, "Pass both positive and negative input"
-            x_pos, x_neg = tuple(input)
+            # assert len(input) == 2, "Pass both positive and negative input"
+            x_pos, x_neg = input[0]
+            device = input[1]
+            x_pos, x_neg = x_pos.to(device), x_neg.to(device)
             for i, module in enumerate(self.children()):
-                print("Training layer", i, "...")
+                # print("Training layer", i, "...")
                 x_pos, x_neg = module(x_pos, x_neg)
             return
         else:

@@ -6,10 +6,12 @@ from torchvision.transforms import Compose, ToTensor, Normalize, Lambda
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from FFNetwork import FFNetworkBatched
+from FFNetwork import FFNetwork
 from FFEncoding import FFEncoding
 
-overlay_y_on_x = FFEncoding.overlay
+overlay_y_on_x = FFEncoding.overlay2d
+
+import time
 
 
 def get_data_loaders(train_batch_size=50, test_batch_size=50):
@@ -44,36 +46,56 @@ def visualize_sample(data, name="", idx=0):
     plt.show()
 
 
+def plot_errors(training_errors, testing_errors, EPOCHS):
+    plt.figure(figsize=(10, 6))  # Adjust the figsize to make the plot wider
+    plt.plot(
+        range(1, EPOCHS + 1), training_errors, label="Training Error"
+    )  # Use training_errors instead of errors
+    plt.plot(
+        range(1, EPOCHS + 1), testing_errors, label="Testing Error"
+    )  # Use testing_errors instead of errors
+    plt.xlabel("Epoch")
+    plt.ylabel("Error")
+    plt.title("Error over Epochs")
+    plt.legend()
+    plt.xticks(range(1, EPOCHS + 1))  # Set x-axis tick labels to 1, 2, ...
+    plt.savefig("error_plot_30_epochs.png")  # Save the plot as a PNG file
+    plt.show()
+
+
 def training_loop(model, iterator, device, encoding="overlay"):
-    print("Training...")
     model.train()
-    model(iterator, device)
+    if batched_per_layer:
+        model(iterator, device)
+    else:
+        model.to(device)
+        for _, x_data in tqdm(enumerate(iterator)):
+            model(x_data, device)
 
 
-def test_loop(model, test_loader, device):
-    print("Evaluating...")
+def test_loop(model, data_loader, device):
     model.eval()
     batch_error = 0
-    for x, y in test_loader:
+    for x, y in data_loader:
         x, y = x.to(device), y.to(device)
         batch_error += calc_error(model, x, y, device)
 
-    avg_error = batch_error / len(test_loader)
-    print(f"testing error: {avg_error}")
-
-
-"""
-eval_loop(
-    model -> nn.Module model
-    input -> tensor input for eval
-    device -> torch.device
-    bached_per_layer -> False by default, if true then load each layer sequentially on device and store the output
-    encoding -> overlay by default
-)
-"""
+    avg_error = batch_error / len(data_loader)
+    print(f"error: {avg_error}")
+    return avg_error
 
 
 def eval_loop(model, input, device, batched_per_layer=False, encoding="overlay"):
+    """
+    eval_loop(
+        model -> nn.Module model
+        input -> tensor input for eval
+        device -> torch.device
+        bached_per_layer -> False by default, if true then load each layer sequentially on device and store the output
+        encoding -> overlay by default
+    )
+    """
+
     if batched_per_layer == True:
         if encoding == "overlay":
             goodness_per_label = []
@@ -105,15 +127,23 @@ def eval_loop(model, input, device, batched_per_layer=False, encoding="overlay")
 
 def calc_error(model, x, y, device) -> float:
     model.eval()
-    return 1 - eval_loop(model, x, device).eq(y).float().mean().item()
+    return (
+        1
+        - eval_loop(model, x, device, batched_per_layer=batched_per_layer)
+        .eq(y)
+        .float()
+        .mean()
+        .item()
+    )
 
 
 if __name__ == "__main__":
     # Define parameters
-    EPOCHS = 10
-    BATCH_SIZE = 50
+    EPOCHS = 20
+    BATCH_SIZE = 5000
     TRAIN_BATCH_SIZE = BATCH_SIZE
     TEST_BATCH_SIZE = BATCH_SIZE
+    batched_per_layer = False
     encoding = "overlay"
     torch.manual_seed(1234)
 
@@ -127,8 +157,10 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Build network
-    net = FFNetworkBatched([784, 500, 500])
+    net = FFNetwork([784, 500, 500, 500])
 
+    training_errors = []
+    testing_errors = []
     # Iterator in place of DataLoader
     data_iter = []
 
@@ -144,12 +176,20 @@ if __name__ == "__main__":
 
         data_iter.append((x_pos, x_neg))
 
-    # Train / test
     for epoch in range(EPOCHS):
         print(f"==== EPOCH: {epoch} ====")
         start = time.time()
+        print("Training.....")
         training_loop(net, data_iter, device)
-        test_loop(net, test_loader, device)
+        print("eval train data")
+        training_error = test_loop(net, train_loader, device)
+        training_errors.append(training_error)
+        print("eval test data")
+        testing_error = test_loop(net, test_loader, device)
+        testing_errors.append(testing_error)
         end = time.time()
         elapsed = end - start
         print(f"Completed epoch {epoch} in {elapsed} seconds")
+    # Plot errors
+
+    plot_errors(training_errors, testing_errors, EPOCHS)
