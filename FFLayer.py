@@ -12,7 +12,7 @@ class FFLayer(Linear):
         activation: Module = ReLU,
         optimizer: Optimizer = None,
         threshold: float = 2.0,
-        num_epochs: int = 1,
+        layer_iters: int = 10,
         bias=True,
         device=None,
         dtype=None,
@@ -24,7 +24,7 @@ class FFLayer(Linear):
         else:
             self.opt = optimizer
         self.threshold = threshold
-        self.num_epochs = num_epochs
+        self.layer_iters = layer_iters
 
     def forward_pass(self, x):
         x_direction = x / (x.norm(2, 1, keepdim=True) + 1e-4)
@@ -35,9 +35,11 @@ class FFLayer(Linear):
     def forward(self, *input):
         if self.training:
             assert len(input) == 2, "Pass both positive and negative input"
-            x_pos, x_neg = tuple(input)
 
-            for _ in range(self.num_epochs):
+            x_pos = input[0]
+            x_neg = input[1]
+
+            for _ in range(self.layer_iters):
                 g_pos = self.forward_pass(x_pos).pow(2).mean(1)
                 g_neg = self.forward_pass(x_neg).pow(2).mean(1)
                 # The following loss pushes pos (neg) samples to
