@@ -9,7 +9,7 @@ from tqdm import tqdm
 from FFNetwork import FFNetwork
 from FFEncoding import FFEncoding
 
-overlay_y_on_x = FFEncoding.overlay2d
+overlay_y_on_x = FFEncoding.overlay
 
 import time
 
@@ -139,7 +139,7 @@ def calc_error(model, x, y, device) -> float:
 
 if __name__ == "__main__":
     # Define parameters
-    EPOCHS = 20
+    EPOCHS = 10
     BATCH_SIZE = 5000
     TRAIN_BATCH_SIZE = BATCH_SIZE
     TEST_BATCH_SIZE = BATCH_SIZE
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Build network
-    net = FFNetwork([784, 500, 500, 500])
+    net = FFNetwork([784, 1000, 1000])
 
     training_errors = []
     testing_errors = []
